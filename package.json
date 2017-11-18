@@ -1,6 +1,6 @@
 {
   "name": "merge-to-master",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "A git utility to handle a processed merge to master",
   "main": "dist/index.js",
   "typings": "dist/index.d.ts",

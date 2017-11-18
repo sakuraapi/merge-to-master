@@ -5,7 +5,7 @@ import {readFile} from 'fs';
 import {prompt} from 'inquirer';
 import {promisify} from 'util';
 import {Git} from './git';
-import {error, message, notice, warn} from './ui';
+import {error, info, message, notice, warn} from './ui';
 
 main();
 
@@ -56,10 +56,21 @@ async function main() {
         const currentPackage = JSON.parse(cpkg);
         const masterPackage = JSON.parse(mpkg);
 
-        console.log(`------------------------`);
-        console.log(currentPackage);
-        console.log(`------------------------`);
-        console.log(masterPackage);
+        info(`'package.json' version on '${currentBranch}': '${currentPackage.version}'`);
+        info(`'package.json' version on 'master': '${masterPackage.version}'`);
+
+        if (!args.skipMatchingVersions && currentPackage.version === masterPackage.version) {
+            const answers = await prompt({
+                default: false,
+                message: `'master' and '${currentBranch}' both have the same version number ${currentPackage.version}, continue?`,
+                name: 'confirm',
+                type: 'confirm'
+            });
+
+            if (!answers.confirm) {
+                error(`'master' and '${currentBranch}' both have the same version number ${currentPackage.version}`);
+            }
+        }
 
     } catch (err) {
         console.log('Unexpected error:'.red);
@@ -73,7 +84,8 @@ async function buildArgs() {
 
     const args = version(pkg.version)
         .option('-c, --config <file ...>', 'Configuration file for procedures')
-        .option('--skipMatchingCommits', 'Will not check to see if branch matches master');
+        .option('--skipMatchingCommits', 'Will not check to see if commits on branch matches master')
+        .option('--skipMatchingVersions', 'Will not check to see if version of package.json on branch matches master');
 
     args.on('--help', help);
 
