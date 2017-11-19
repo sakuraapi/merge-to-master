@@ -1,0 +1,6 @@
+{
+  "before": [
+    "./scripts/test.js",
+    "npm -v"
+  ]
+}

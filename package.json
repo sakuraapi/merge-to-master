@@ -1,0 +1,56 @@
+{
+  "name": "@sakuraapi/merge-to-master",
+  "version": "0.1.0",
+  "description": "A git utility to handle a processed merge to master",
+  "main": "dist/index.js",
+  "typings": "dist/index.d.ts",
+  "bin": {
+    "m2m": "./dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "rm -rf dist/ ; mkdir -p ./dist; tsc ; chmod +x ./dist/index.js",
+    "install": "chmod +x ./scripts/*.js",
+    "prepublish": "npm run build && npm test && npx nsp check",
+    "start": "npm run build ; m2m",
+    "test": "echo no tests"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/etsuo/merge-to-master.git"
+  },
+  "keywords": [
+    "git",
+    "merge",
+    "utility",
+    "master"
+  ],
+  "author": "Jean-Pierre E. Poveda",
+  "license": "BSD-3-Clause",
+  "bugs": {
+    "url": "https://github.com/etsuo/merge-to-master/issues"
+  },
+  "homepage": "https://github.com/etsuo/merge-to-master#readme",
+  "engines": {
+    "node": ">=8.0.0"
+  },
+  "dependencies": {
+    "cli-table": "^0.3.1",
+    "colors": "^1.1.2",
+    "commander": "^2.11.0",
+    "inquirer": "^4.0.0",
+    "inquirer-autocomplete-prompt": "^0.12.0",
+    "rxjs": "^5.5.2",
+    "shelljs": "^0.7.8"
+  },
+  "devDependencies": {
+    "@types/colors": "^1.1.3",
+    "@types/commander": "^2.11.0",
+    "@types/inquirer": "0.0.35",
+    "@types/shelljs": "^0.7.6",
+    "nsp": "^3.1.0",
+    "typescript": "^2.6.1"
+  }
+}
