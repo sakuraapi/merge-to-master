@@ -156,7 +156,10 @@ class Main {
     return Observable
       .from(this.git.getLogs())
       .filter((log) => log.matches(input))
-      .map((log) => `${log.hash} [${log.branch}] ${log.committer}, ${log.subject.substring(0, 100)}`)
+      .map((log) => (log.branch)
+        ? `${log.hash} [${log.branch}] ${log.committer}, ${log.subject.substring(0, 80)}`
+        : `${log.hash} ${log.committer}, ${log.subject.substring(0, 80)}`
+      )
       .toArray()
       .toPromise();
   }
