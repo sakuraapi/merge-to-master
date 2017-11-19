@@ -16,6 +16,7 @@ class Main {
 
   args;
   config: { before: string[], after: string[] };
+  currentBranch: string;
   git = new Git();
   masterGitHash: string;
   masterPackage: any;
@@ -31,6 +32,7 @@ class Main {
     try {
       notice(`Merge to Master, (c) 2017 Jean-Pierre E. Poveda`);
 
+      this.currentBranch = this.git.getCurrentBranch();
       this.args = await this.buildArgs();
 
       if (this.git.hasUncommittedChanges() && !this.args.skipUncommittedChanges) {
@@ -93,10 +95,12 @@ class Main {
     });
 
     if (!answers.confirm) {
+      this.git.checkout(this.currentBranch);
       return;
     }
 
     this.git.pushToOrigin();
+    this.git.checkout(this.currentBranch);
   }
 
   private async doScript(script: string) {
