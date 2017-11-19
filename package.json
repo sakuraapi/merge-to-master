@@ -1,5 +1,5 @@
 {
-  "name": "merge-to-master",
+  "name": "@sakuraapi/merge-to-master",
   "version": "0.1.0",
   "description": "A git utility to handle a processed merge to master",
   "main": "dist/index.js",
@@ -8,13 +8,14 @@
     "m2m": "./dist/index.js"
   },
   "files": [
-    "./dist/**/*"
+    "dist"
   ],
   "scripts": {
     "build": "rm -rf dist/ ; mkdir -p ./dist; tsc ; chmod +x ./dist/index.js",
     "install": "chmod +x ./scripts/*.js",
+    "prepublish": "npm test && npx nsp check",
     "start": "npm run build ; m2m",
-    "test": "npm test"
+    "test": "echo no tests"
   },
   "repository": {
     "type": "git",
@@ -49,6 +50,7 @@
     "@types/commander": "^2.11.0",
     "@types/inquirer": "0.0.35",
     "@types/shelljs": "^0.7.6",
+    "nsp": "^3.1.0",
     "typescript": "^2.6.1"
   }
 }
