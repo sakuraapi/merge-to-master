@@ -49,13 +49,15 @@ class Main {
       const cpkg: any = this.git.getFile('package.json', this.sourceCommit.hash)
         || error(`'${this.sourceCommit.hash}, branch:[${this.sourceCommit.branch}]' package.json is missing`);
 
-      const mpkg: any = this.git.getFile('package.json', 'master') || (this.args.skipMatchingVersions)
-        ? (() => {
-          notice(`'master' branch 'package.json' is missing`);
-          return '{"version":"not defined"}';
-        })()
-        : error(`'master' branch 'package.json' is missing`);
+      let mpkg: any = this.git.getFile('package.json', 'master');
 
+      if (!mpkg && this.args.skipMatchingVersions) {
+        notice(`'master' branch 'package.json' is missing`);
+        mpkg = '{"version":"not defined"}';
+      } else if (!mpkg) {
+        error(`'master' branch 'package.json' is missing`);
+      }
+      
       this.sourcePackage = this.loadPackageJson(cpkg, this.sourceCommit.hash);
       this.masterPackage = this.loadPackageJson(mpkg, 'master');
       await this.verifyPackageVersions();
