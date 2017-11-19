@@ -87,7 +87,7 @@ export class Git {
   }
 
   pushToOrigin() {
-    const code = exec(`git push origin --tags`).code;
+    const code = exec(`git push origin --follow-tags`).code;
 
     if (code !== 0) {
       error(`unable to push ${this.getCurrentBranch()} to origin with tags`);
