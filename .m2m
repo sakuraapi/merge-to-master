@@ -1,6 +1,6 @@
 {
   "before": [
     "./scripts/test.js",
-    "npm list --depth=0"
+    "npm -v"
   ]
 }
