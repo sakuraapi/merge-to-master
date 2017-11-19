@@ -1,103 +1,245 @@
 #!/usr/bin/env node
+
+import * as Table from 'cli-table';
 import 'colors';
 import {version} from 'commander';
 import {readFile} from 'fs';
-import {prompt} from 'inquirer';
+import {prompt, registerPrompt} from 'inquirer';
+import * as autoComplete from 'inquirer-autocomplete-prompt';
+import {Observable} from 'rxjs';
+import {exec} from 'shelljs';
 import {promisify} from 'util';
-import {Git} from './git';
+import {Git, Log} from './git';
 import {error, info, message, notice, warn} from './ui';
 
-main();
+class Main {
 
-async function main() {
-    const git = new Git();
-    const rf = promisify(readFile);
+  args;
+  config: { before: string[], after: string[] };
+  git = new Git();
+  masterGitHash: string;
+  masterPackage: any;
+  sourceCommit: Log;
+  sourcePackage: any;
+  rf = promisify(readFile);
 
+  constructor() {
+    registerPrompt('autocomplete', autoComplete);
+  }
+
+  async start() {
     try {
-        const currentBranch = git.currentBranch;
+      notice(`Merge to Master, (c) 2017 Jean-Pierre E. Poveda`);
 
-        notice(`Merge to Master, (c) 2017 Jean-Pierre E. Poveda`);
-        warn(`Current branch is: ${currentBranch.rainbow}`);
+      this.args = await this.buildArgs();
 
-        const args = await buildArgs();
+      if (this.git.hasUncommittedChanges() && !this.args.skipUncommittedChanges) {
+        error('...uncommitted changes...');
+      }
 
-        const configFile = args.config || '.m2m';
-        const config = JSON.parse(await rf(configFile, 'utf8'));
+      this.sourceCommit = await this.getTargetCommit();
 
-        if (!Array.isArray(config) || config.some((val) => typeof val !== 'string')) {
-            error(`${configFile} should be an array of strings pointing to scripts that return 0 on success and > 0 on failure`);
-            process.exit(1);
-        }
+      await this.getConfig(this.args);
 
-        if (!args.skipMatchingCommits && git.currentBranchMatches('master')) {
-            const answers = await prompt({
-                default: false,
-                message: `'master' and '${currentBranch}' are both on commit ${git.getHash('master')}, continue?`,
-                name: 'confirm',
-                type: 'confirm'
-            });
+      this.masterGitHash = this.git.getHash('master');
+      await this.verifyCommits();
 
-            if (!answers.confirm) {
-                error(`'master' and '${currentBranch}' are both on commit ${git.getHash('master')}`);
-            }
-        }
+      const cpkg: any = this.git.getFile('package.json', this.sourceCommit.hash)
+        || error(`'${this.sourceCommit.hash}, branch:[${this.sourceCommit.branch}]' package.json is missing`);
 
-        const cpkg = git.getFile('package.json');
-        const mpkg = git.getFile('package.json', 'master');
+      const mpkg: any = this.git.getFile('package.json', 'master')
+        || error(`'master' branch 'package.json' is missing`);
 
-        if (!cpkg) {
-            error(`'${currentBranch}' branch 'package.json' is missing`);
-        }
+      this.sourcePackage = this.loadPackageJson(cpkg, this.sourceCommit.hash);
+      this.masterPackage = this.loadPackageJson(mpkg, 'master');
+      await this.verifyPackageVersions();
 
-        if (!mpkg) {
-            error(`'master' branch 'package.json' is missing`);
-        }
-
-        const currentPackage = JSON.parse(cpkg);
-        const masterPackage = JSON.parse(mpkg);
-
-        info(`'package.json' version on '${currentBranch}': '${currentPackage.version}'`);
-        info(`'package.json' version on 'master': '${masterPackage.version}'`);
-
-        if (!args.skipMatchingVersions && currentPackage.version === masterPackage.version) {
-            const answers = await prompt({
-                default: false,
-                message: `'master' and '${currentBranch}' both have the same version number ${currentPackage.version}, continue?`,
-                name: 'confirm',
-                type: 'confirm'
-            });
-
-            if (!answers.confirm) {
-                error(`'master' and '${currentBranch}' both have the same version number ${currentPackage.version}`);
-            }
-        }
+      await this.run();
 
     } catch (err) {
-        console.log('Unexpected error:'.red);
-        console.log(`${err}`.red);
+      console.log('Unexpected error:'.red);
+      console.log(`${err}`.red);
     }
-}
+  }
 
-async function buildArgs() {
-    const rf = promisify(readFile);
-    const pkg = JSON.parse(await rf('./package.json', 'utf8'));
+  private async buildArgs() {
+    const pkg = JSON.parse(await this.rf('./package.json', 'utf8'));
 
     const args = version(pkg.version)
-        .option('-c, --config <file ...>', 'Configuration file for procedures')
-        .option('--skipMatchingCommits', 'Will not check to see if commits on branch matches master')
-        .option('--skipMatchingVersions', 'Will not check to see if version of package.json on branch matches master');
+      .option('-c, --config <file ...>', 'Configuration file for procedures')
+      .option('--skipMatchingCommits', 'Will not check to see if commits on branch matches master')
+      .option('--skipMatchingVersions', 'Will not check to see if version of package.json on branch matches master')
+      .option('--skipUncommittedChanges', 'Will not check to see if there are uncommitted changes');
 
-    args.on('--help', help);
+    args.on('--help', this.help);
 
     args.parse(process.argv);
 
     return args;
-}
+  }
 
-function help() {
+  private async doMerge() {
+    this.git.checkout('master');
+    this.git.merge(this.sourceCommit, this.sourcePackage.version);
+
+    const lastLog = this.git.getLogs(1)[0];
+    this.git.tag(lastLog, this.sourcePackage.version);
+
+    const answers = await prompt({
+      default: false,
+      message: `Push commit with tags to origin`,
+      name: 'confirm',
+      type: 'confirm'
+    });
+
+    if (!answers.confirm) {
+      return;
+    }
+
+    this.git.pushToOrigin();
+  }
+
+  private async doScript(script: string) {
+    const ex = promisify(exec);
+    const cmd = script.startsWith('.')
+      ? `${script} --source ${this.sourceCommit.hash} --target 'master'`
+      : script;
+
+    try {
+      notice(`starting ${script}`);
+      const result: any = await exec(cmd);
+
+      const resultMsg = `${script} returned ${result.code}`;
+      if (result.code === 0) {
+        info(`✔ ${resultMsg}`);
+      } else {
+        error(`⛔  ${resultMsg}`);
+      }
+    } catch (err) {
+      error(`unexpected error running script ${script}: ${err}`);
+    }
+  }
+
+  private async getConfig(args) {
+    try {
+      const configFile = args.config || '.m2m';
+      this.config = JSON.parse(await this.rf(configFile, 'utf8'));
+
+      if (!this.config || typeof this.config !== 'object') {
+        error(`${configFile} before is malformed.`);
+      }
+
+      if (!Array.isArray(this.config.before) || this.config.before.some((val) => typeof val !== 'string')) {
+        error(`${configFile} before is malformed.`);
+      }
+
+      if (this.config.after && (!Array.isArray(this.config.after) || this.config.after.some((val) => typeof val !== 'string'))) {
+        error(`${configFile} after is malformed.`);
+      }
+    } catch (err) {
+      error(`Unable to parse config file '${args.config || '.m2m'}', ${err}`);
+    }
+  }
+
+  private async getTargetCommit() {
+    const answers = await prompt({
+      type: 'autocomplete',
+      name: 'commit',
+      message: 'Select the commit you want to merge to master:',
+      source: this.filterCommits.bind(this)
+    } as any);
+
+    return await this.git.getLog(answers.commit.substr(0, answers.commit.indexOf(' ')));
+  }
+
+  private async filterCommits(answers, input) {
+    return Observable
+      .from(this.git.getLogs())
+      .filter((log) => log.matches(input))
+      .map((log) => `${log.hash} [${log.branch}] ${log.committer}, ${log.subject.substring(0, 100)}`)
+      .toArray()
+      .toPromise();
+  }
+
+  private async help() {
     message('');
     message('Merge to Master (m2m) is a utility to procedurally merge to master. It looks for a', 2);
     message('.m2m file that has an array of paths pointing to executable scripts that must each', 2);
     message('exit 0 in order to continue.', 2);
     message('');
+  }
+
+  private loadPackageJson(text: string, commit: string) {
+    try {
+      return JSON.parse(text);
+    } catch (err) {
+      error(`Problem with parsing ${commit} 'package.json', ${err}`);
+    }
+  }
+
+  private async run() {
+    for (const script of this.config.before) {
+      await this.doScript(script);
+    }
+
+    this.doMerge();
+
+    if (this.config.after) {
+      for (const script of this.config.after) {
+        await this.doScript(script);
+      }
+    }
+  }
+
+  private async verifyCommits() {
+    if (!this.args.skipMatchingCommits && this.git.currentBranchMatches('master')) {
+      const answers = await prompt({
+        default: false,
+        message: `'master (${this.masterGitHash})' and '${this.sourceCommit.hash}' are the same commit, continue?`,
+        name: 'confirm',
+        type: 'confirm'
+      });
+
+      if (!answers.confirm) {
+        error(`'master (${this.masterGitHash})' on the same commit`);
+      }
+    } else {
+      const msg = `source (${this.sourceCommit.hash}) -> target 'master' (${this.masterGitHash})`;
+      this.git.currentBranchMatches('master')
+        ? warn(msg)
+        : info(msg);
+    }
+  }
+
+  private async verifyPackageVersions() {
+    if (!this.args.skipMatchingVersions && this.sourcePackage.version === this.masterPackage.version) {
+      const answers = await prompt({
+        default: false,
+        message: `''master (${this.masterGitHash})' and '${this.sourceCommit.hash}' are the same commit, continue?`,
+        name: 'confirm',
+        type: 'confirm'
+      });
+
+      if (!answers.confirm) {
+        error(`'master' and '${this.sourceCommit.hash}' both have the same version number ${this.sourcePackage.version}`);
+      }
+    } else {
+      const table = new Table({
+        head: ['git', 'package.json version']
+      });
+
+      const color = this.sourcePackage.version === this.masterPackage.version
+        ? 'yellow'
+        : 'green';
+
+      table.push(
+        [this.sourceCommit.hash[color], this.sourcePackage.version[color]],
+        ['master'[color], this.masterPackage.version[color]]
+      );
+
+      console.log(table.toString());
+    }
+  }
 }
+
+new Main().start();
