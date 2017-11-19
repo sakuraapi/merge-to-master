@@ -74,10 +74,7 @@ export class Log {
 }
 
 export class Git {
-  currentBranchMatches(branchName: string): boolean {
-    return this.getHash(this.getCurrentBranch()) === this.getHash(branchName);
-  }
-
+  
   checkout(branch: string) {
     const code = exec(`git checkout ${branch}`).code;
 
@@ -117,7 +114,7 @@ export class Git {
     return (exec(`git show ${commit}:./${file}`, {silent: true}).stdout as string).trim();
   }
 
-  getHash(branchName: string): string {
+  getBranchHash(branchName: string): string {
     const branches = this.getBranches();
     for (const branch of branches) {
       if (branch.name === branchName) {

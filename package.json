@@ -1,6 +1,6 @@
 {
   "name": "@sakuraapi/merge-to-master",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "A git utility to handle a processed merge to master",
   "main": "dist/index.js",
   "typings": "dist/index.d.ts",

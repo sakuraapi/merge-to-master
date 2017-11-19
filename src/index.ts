@@ -43,7 +43,7 @@ class Main {
 
       await this.getConfig(this.args);
 
-      this.masterGitHash = this.git.getHash('master');
+      this.masterGitHash = this.git.getBranchHash('master');
       await this.verifyCommits();
 
       const cpkg: any = this.git.getFile('package.json', this.sourceCommit.hash)
@@ -57,7 +57,7 @@ class Main {
       } else if (!mpkg) {
         error(`'master' branch 'package.json' is missing`);
       }
-      
+
       this.sourcePackage = this.loadPackageJson(cpkg, this.sourceCommit.hash);
       this.masterPackage = this.loadPackageJson(mpkg, 'master');
       await this.verifyPackageVersions();
@@ -205,7 +205,7 @@ class Main {
   }
 
   private async verifyCommits() {
-    if (!this.args.skipMatchingCommits && this.git.currentBranchMatches('master')) {
+    if (!this.args.skipMatchingCommits && this.sourceCommit.hash === this.git.getBranchHash('master')) {
       const answers = await prompt({
         default: false,
         message: `'master (${this.masterGitHash})' and '${this.sourceCommit.hash}' are the same commit, continue?`,
@@ -214,11 +214,11 @@ class Main {
       });
 
       if (!answers.confirm) {
-        error(`'master (${this.masterGitHash})' on the same commit`);
+        error(`'master (${this.masterGitHash})' and '${this.sourceCommit.hash}' are the same commit`);
       }
     } else {
       const msg = `source (${this.sourceCommit.hash}) -> target 'master' (${this.masterGitHash})`;
-      this.git.currentBranchMatches('master')
+      this.sourceCommit.hash === this.git.getBranchHash('master')
         ? warn(msg)
         : info(msg);
     }
@@ -228,13 +228,13 @@ class Main {
     if (!this.args.skipMatchingVersions && this.sourcePackage.version === this.masterPackage.version) {
       const answers = await prompt({
         default: false,
-        message: `''master (${this.masterGitHash})' and '${this.sourceCommit.hash}' are the same commit, continue?`,
+        message: `master and ${this.sourceCommit.hash} have the same package.json version number ${this.sourcePackage.version}, continue?`,
         name: 'confirm',
         type: 'confirm'
       });
 
       if (!answers.confirm) {
-        error(`'master' and '${this.sourceCommit.hash}' both have the same version number ${this.sourcePackage.version}`);
+        error(`master and ${this.sourceCommit.hash} have the same package.json version number ${this.sourcePackage.version}`);
       }
     } else {
       const table = new Table({
