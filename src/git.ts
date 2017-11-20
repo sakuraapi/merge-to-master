@@ -147,7 +147,7 @@ export class Git {
   }
 
   hasUncommittedChanges() {
-    return exec(`git diff-index --quiet HEAD`).code !== 0;
+    return exec(`git status --porcelain`).stdout.length > 0;
   }
 
   merge(commit: Log, version: string) {
