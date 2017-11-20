@@ -95,6 +95,7 @@ class Main {
   }
 
   private async buildArgs() {
+
     const v = await this.rf(join(__dirname, 'version'), 'utf8');
 
     const args = version(v)
@@ -106,13 +107,14 @@ class Main {
 
     args.on('--help', this.help);
 
-    args.parse(process.argv);
+    await args.parse(process.argv);
 
     return args;
   }
 
   private cleanup() {
-    if (this.branchBookmark !== this.git.getCurrentBranch()) {
+
+    if (this.branchBookmark && this.branchBookmark !== this.git.getCurrentBranch()) {
       this.git.checkout(this.branchBookmark);
     }
   }
