@@ -6,7 +6,9 @@ import {version} from 'commander';
 import {readFile} from 'fs';
 import {prompt, registerPrompt} from 'inquirer';
 import * as autoComplete from 'inquirer-autocomplete-prompt';
+import {join} from 'path';
 import {Observable} from 'rxjs';
+import * as semver from 'semver';
 import {exec} from 'shelljs';
 import {promisify} from 'util';
 import {Git, Log} from './git';
@@ -20,7 +22,6 @@ class Main {
   branchBookmark: string;
   config: { before: string[], after: string[] };
   git = new Git();
-  masterGitHash: string;
   masterPackage: any;
   sourceCommit: Log;
   sourcePackage: any;
@@ -63,9 +64,6 @@ class Main {
 
       await this.getConfig(this.args);
 
-      this.masterGitHash = this.git.getBranchHash('master');
-      await this.verifyCommits();
-
       const cpkg: any = this.git.getFile('package.json', this.sourceCommit.hash)
         || error(`'${this.sourceCommit.hash}, branch:[${this.sourceCommit.branch}]' package.json is missing`);
 
@@ -80,6 +78,7 @@ class Main {
 
       this.sourcePackage = this.loadPackageJson(cpkg, this.sourceCommit.hash);
       this.masterPackage = this.loadPackageJson(mpkg, 'master');
+
       await this.verifyPackageVersions();
 
       await this.run();
@@ -91,12 +90,11 @@ class Main {
   }
 
   private async buildArgs() {
-    const pkg = JSON.parse(await this.rf('./package.json', 'utf8'));
+    const v = await this.rf(join(__dirname, 'version'), 'utf8');
 
-    const args = version(pkg.version)
+    const args = version(v)
       .option('-c, --config <file ...>', 'Configuration file for procedures')
       .option('-l, --logs', 'Lists the git logs that m2m sees')
-      .option('--skipMatchingCommits', 'Will not check to see if commits on branch matches master')
       .option('--skipMatchingVersions', 'Will not check to see if version of package.json on branch matches master')
       .option('--skipUncommittedChanges', 'Will not check to see if there are uncommitted changes');
 
@@ -108,7 +106,9 @@ class Main {
   }
 
   private cleanup() {
-    this.git.checkout(this.branchBookmark);
+    if (this.branchBookmark !== this.git.getCurrentBranch()) {
+      this.git.checkout(this.branchBookmark);
+    }
   }
 
   private async doMerge() {
@@ -228,54 +228,42 @@ class Main {
     }
   }
 
-  private async verifyCommits() {
-    if (!this.args.skipMatchingCommits && this.sourceCommit.hash === this.git.getBranchHash('master')) {
-      const answers = await prompt({
-        default: false,
-        message: `'master (${this.masterGitHash})' and '${this.sourceCommit.hash}' are the same commit, continue?`,
-        name: 'confirm',
-        type: 'confirm'
-      });
-
-      if (!answers.confirm) {
-        error(`'master (${this.masterGitHash})' and '${this.sourceCommit.hash}' are the same commit`);
-      }
-    } else {
-      const msg = `source (${this.sourceCommit.hash}) -> target 'master' (${this.masterGitHash})`;
-      this.sourceCommit.hash === this.git.getBranchHash('master')
-        ? warn(msg)
-        : info(msg);
-    }
-  }
-
   private async verifyPackageVersions() {
-    if (!this.args.skipMatchingVersions && this.sourcePackage.version === this.masterPackage.version) {
-      const answers = await prompt({
-        default: false,
-        message: `master and ${this.sourceCommit.hash} have the same package.json version number ${this.sourcePackage.version}, continue?`,
-        name: 'confirm',
-        type: 'confirm'
-      });
+    const table = new Table({
+      head: ['git', 'package.json version']
+    });
 
-      if (!answers.confirm) {
-        error(`master and ${this.sourceCommit.hash} have the same package.json version number ${this.sourcePackage.version}`);
-      }
-    } else {
-      const table = new Table({
-        head: ['git', 'package.json version']
-      });
+    const color = this.sourcePackage.version === this.masterPackage.version
+      ? 'yellow'
+      : 'green';
 
-      const color = this.sourcePackage.version === this.masterPackage.version
-        ? 'yellow'
-        : 'green';
+    table.push(
+      [this.sourceCommit.hash[color], this.sourcePackage.version[color]],
+      ['master'[color], this.masterPackage.version[color]]
+    );
 
-      table.push(
-        [this.sourceCommit.hash[color], this.sourcePackage.version[color]],
-        ['master'[color], this.masterPackage.version[color]]
-      );
+    console.log(table.toString());
 
-      console.log(table.toString());
+    let msg = `${this.sourceCommit.hash} package.json version (${this.sourcePackage.version}) will be merged to master replacing ${this.masterPackage.version}, continue?`;
+    if (semver.lt(this.sourcePackage.version, this.masterPackage.version)) {
+      msg = `${this.sourceCommit.hash} package.json version (${this.sourcePackage.version}) is >${'BEHIND'.red.underline.bold}< master's (${this.masterPackage.version}), continue?`;
     }
+
+    if (!this.args.skipMatchingVersions && this.sourcePackage.version === this.masterPackage.version) {
+      msg = `master and ${this.sourceCommit.hash} have the >${'SAME'.red.underline.bold}< package.json version number ${this.sourcePackage.version}, continue?`;
+    }
+
+    const answers = await prompt({
+      default: false,
+      message: msg,
+      name: 'confirm',
+      type: 'confirm'
+    });
+
+    if (!answers.confirm) {
+      error(`Aborting, ${this.sourcePackage.version} will not replace ${this.masterPackage.version}`);
+    }
+
   }
 }
 
