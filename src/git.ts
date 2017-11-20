@@ -50,13 +50,14 @@ export class Log {
   branch: string;
 
   constructor(raw: string) {
-    const json = JSON.parse(raw);
 
-    this.hash = json.hash;
-    this.committer = json.committer;
-    this.email = json.email;
-    this.subject = json.subject;
-    this.branch = json.branch;
+    const parts = raw.split('[@[@');
+
+    this.hash = parts[0];
+    this.committer = parts[1];
+    this.email = parts[2];
+    this.subject = parts[3];
+    this.branch = parts[4];
   }
 
   matches(input: string): boolean {
@@ -92,7 +93,7 @@ export class Git {
   }
 
   getBranches(): Branch[] {
-    const branches = (exec('git branch -vv', {silent: true}).stdout as string)
+    const branches = (exec('git --no-pager branch -vv', {silent: true}).stdout as string)
       .split('\n')
       .filter((val) => val !== '');
 
@@ -111,7 +112,7 @@ export class Git {
   getFile(file: string, commit?: string): string {
     commit = commit || 'HEAD';
 
-    return (exec(`git show ${commit}:./${file}`, {silent: true}).stdout as string).trim();
+    return (exec(`git --no-pager show ${commit}:./${file}`, {silent: true}).stdout as string).trim();
   }
 
   getBranchHash(branchName: string): string {
@@ -133,7 +134,7 @@ export class Git {
 
   getLogs(length?: number): Log[] {
     const limit = (length) ? ` -${length}` : '';
-    const output = exec(`git log --first-parent --pretty=format:'{"hash":"%h","committer":"%cn","email":"%ce","subject":"%s", "branch":"%D"}'${limit}`, {silent: true}).stdout as string;
+    const output = exec(`git --no-pager log --pretty=format:'%h[@[@%cn[@[@%ce[@[@%s[@[@%D'${limit}`, {silent: true}).stdout as string;
 
     const logs = output.split('\n');
 
@@ -141,6 +142,7 @@ export class Git {
     for (const log of logs) {
       results.push(new Log(log));
     }
+
     return results;
   }
 
