@@ -26,6 +26,13 @@ class Main {
 
   constructor() {
     registerPrompt('autocomplete', autoComplete);
+
+    process.on('exit', () => this.cleanup.call(this));
+    process.on('SIGINT', () => this.cleanup.call(this));
+    process.on('SIGUSR1', () => this.cleanup.call(this));
+    process.on('SIGUSR2', () => this.cleanup.call(this));
+    process.on('uncaughtException', () => this.cleanup.call(this));
+
   }
 
   async start() {
@@ -88,6 +95,10 @@ class Main {
     return args;
   }
 
+  private cleanup() {
+    this.git.checkout(this.branchBookmark);
+  }
+
   private async doMerge() {
     this.git.checkout('master');
     this.git.merge(this.sourceCommit, this.sourcePackage.version);
@@ -108,7 +119,6 @@ class Main {
     }
 
     this.git.pushToOrigin();
-    this.git.checkout(this.branchBookmark);
   }
 
   private async doScript(script: string) {
