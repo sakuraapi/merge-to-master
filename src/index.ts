@@ -40,10 +40,15 @@ class Main {
 
   async start() {
     try {
+      this.args = await this.buildArgs();
+
       notice(`Merge to Master, (c) 2017 Jean-Pierre E. Poveda`);
 
+      if (this.args.dryRun) {
+        warn(`\nDry run mode.... merge will not actually take place\n`);
+      }
+
       this.branchBookmark = this.git.getCurrentBranch();
-      this.args = await this.buildArgs();
 
       if (this.args.logs) {
         const logs = this.git.getLogs();
@@ -94,6 +99,7 @@ class Main {
 
     const args = version(v)
       .option('-c, --config <file ...>', 'Configuration file for procedures')
+      .option('-d, --dryRun', 'Does everything, but skips the actual merge to master')
       .option('-l, --logs', 'Lists the git logs that m2m sees')
       .option('--skipMatchingVersions', 'Will not check to see if version of package.json on branch matches master')
       .option('--skipUncommittedChanges', 'Will not check to see if there are uncommitted changes');
@@ -219,7 +225,9 @@ class Main {
       await this.doScript(script);
     }
 
-    this.doMerge();
+    if (!this.args.dryRun) {
+      this.doMerge();
+    }
 
     if (this.config.after) {
       for (const script of this.config.after) {
