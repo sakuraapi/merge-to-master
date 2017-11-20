@@ -15,8 +15,8 @@ import {error, info, message, notice, warn} from './ui';
 class Main {
 
   args;
+  branchBookmark: string;
   config: { before: string[], after: string[] };
-  currentBranch: string;
   git = new Git();
   masterGitHash: string;
   masterPackage: any;
@@ -32,7 +32,7 @@ class Main {
     try {
       notice(`Merge to Master, (c) 2017 Jean-Pierre E. Poveda`);
 
-      this.currentBranch = this.git.getCurrentBranch();
+      this.branchBookmark = this.git.getCurrentBranch();
       this.args = await this.buildArgs();
 
       if (this.git.hasUncommittedChanges() && !this.args.skipUncommittedChanges) {
@@ -40,6 +40,8 @@ class Main {
       }
 
       this.sourceCommit = await this.getTargetCommit();
+
+      this.git.checkout(this.sourceCommit.hash);
 
       await this.getConfig(this.args);
 
@@ -101,12 +103,12 @@ class Main {
     });
 
     if (!answers.confirm) {
-      this.git.checkout(this.currentBranch);
+      this.git.checkout(this.branchBookmark);
       return;
     }
 
     this.git.pushToOrigin();
-    this.git.checkout(this.currentBranch);
+    this.git.checkout(this.branchBookmark);
   }
 
   private async doScript(script: string) {
