@@ -12,6 +12,8 @@ import {promisify} from 'util';
 import {Git, Log} from './git';
 import {error, info, message, notice, warn} from './ui';
 
+const SUBJECT_LENGTH = 80;
+
 class Main {
 
   args;
@@ -41,6 +43,15 @@ class Main {
 
       this.branchBookmark = this.git.getCurrentBranch();
       this.args = await this.buildArgs();
+
+      if (this.args.logs) {
+        const logs = this.git.getLogs();
+        for (const log of logs) {
+          message(`${log.hash}${log.branch ? ', branch: ' : ''}${log.branch}, ${log.subject.substring(0, SUBJECT_LENGTH)}`);
+        }
+        info(`Total logs: ${logs.length}`);
+        process.exit(0);
+      }
 
       if (this.git.hasUncommittedChanges() && !this.args.skipUncommittedChanges) {
         error('...uncommitted changes...');
@@ -74,8 +85,8 @@ class Main {
       await this.run();
 
     } catch (err) {
-      console.log('Unexpected error:'.red);
-      console.log(`${err}`.red);
+      warn('Unexpected error:'.red);
+      error(`${err}`);
     }
   }
 
@@ -84,6 +95,7 @@ class Main {
 
     const args = version(pkg.version)
       .option('-c, --config <file ...>', 'Configuration file for procedures')
+      .option('-l, --logs', 'Lists the git logs that m2m sees')
       .option('--skipMatchingCommits', 'Will not check to see if commits on branch matches master')
       .option('--skipMatchingVersions', 'Will not check to see if version of package.json on branch matches master')
       .option('--skipUncommittedChanges', 'Will not check to see if there are uncommitted changes');
@@ -179,7 +191,7 @@ class Main {
       .from(this.git.getLogs())
       .filter((log) => log.matches(input))
       .map((log) => (log.branch)
-        ? `${log.hash} [${log.branch}] ${log.committer}, ${log.subject.substring(0, 80)}`
+        ? `${log.hash} [${log.branch}] ${log.committer}, ${log.subject.substring(0, SUBJECT_LENGTH)}`
         : `${log.hash} ${log.committer}, ${log.subject.substring(0, 80)}`
       )
       .toArray()
