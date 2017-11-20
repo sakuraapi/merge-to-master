@@ -15,8 +15,8 @@ import {error, info, message, notice, warn} from './ui';
 class Main {
 
   args;
+  branchBookmark: string;
   config: { before: string[], after: string[] };
-  currentBranch: string;
   git = new Git();
   masterGitHash: string;
   masterPackage: any;
@@ -26,13 +26,20 @@ class Main {
 
   constructor() {
     registerPrompt('autocomplete', autoComplete);
+
+    process.on('exit', () => this.cleanup.call(this));
+    process.on('SIGINT', () => this.cleanup.call(this));
+    process.on('SIGUSR1', () => this.cleanup.call(this));
+    process.on('SIGUSR2', () => this.cleanup.call(this));
+    process.on('uncaughtException', () => this.cleanup.call(this));
+
   }
 
   async start() {
     try {
       notice(`Merge to Master, (c) 2017 Jean-Pierre E. Poveda`);
 
-      this.currentBranch = this.git.getCurrentBranch();
+      this.branchBookmark = this.git.getCurrentBranch();
       this.args = await this.buildArgs();
 
       if (this.git.hasUncommittedChanges() && !this.args.skipUncommittedChanges) {
@@ -40,6 +47,8 @@ class Main {
       }
 
       this.sourceCommit = await this.getTargetCommit();
+
+      this.git.checkout(this.sourceCommit.hash);
 
       await this.getConfig(this.args);
 
@@ -86,6 +95,10 @@ class Main {
     return args;
   }
 
+  private cleanup() {
+    this.git.checkout(this.branchBookmark);
+  }
+
   private async doMerge() {
     this.git.checkout('master');
     this.git.merge(this.sourceCommit, this.sourcePackage.version);
@@ -101,12 +114,11 @@ class Main {
     });
 
     if (!answers.confirm) {
-      this.git.checkout(this.currentBranch);
+      this.git.checkout(this.branchBookmark);
       return;
     }
 
     this.git.pushToOrigin();
-    this.git.checkout(this.currentBranch);
   }
 
   private async doScript(script: string) {

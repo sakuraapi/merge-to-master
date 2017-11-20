@@ -74,12 +74,12 @@ export class Log {
 }
 
 export class Git {
-  
-  checkout(branch: string) {
-    const code = exec(`git checkout ${branch}`).code;
+
+  checkout(target: string) {
+    const code = exec(`git checkout ${target}`).code;
 
     if (code !== 0) {
-      error(`unable to checkout ${branch}`);
+      error(`unable to checkout ${target}`);
     }
   }
 
