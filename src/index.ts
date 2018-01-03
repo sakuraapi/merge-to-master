@@ -78,7 +78,7 @@ class Main {
         notice(`'master' branch 'package.json' is missing`);
         mpkg = '{"version":"not defined"}';
       } else if (!mpkg) {
-        error(`'master' branch 'package.json' is missing`);
+        error(`'master' branch 'package.json' is missing, did you mean to run m2m with --skipMatchingVersions?`);
       }
 
       this.sourcePackage = this.loadPackageJson(cpkg, this.sourceCommit.hash);
@@ -90,6 +90,9 @@ class Main {
 
     } catch (err) {
       warn('Unexpected error:'.red);
+      console.log(`------------------------`.red);
+      console.log(err);
+      console.log(`------------------------`.red);
       error(`${err}`);
     }
   }
@@ -102,7 +105,7 @@ class Main {
       .option('-c, --config <file ...>', 'Configuration file for procedures')
       .option('-d, --dryRun', 'Does everything, but skips the actual merge to master')
       .option('-l, --logs', 'Lists the git logs that m2m sees')
-      .option('--skipMatchingVersions', 'Will not check to see if version of package.json on branch matches master')
+      .option('--skipMatchingVersions', 'Skip check of package.json matches master version (use for first merge to master)')
       .option('--skipUncommittedChanges', 'Will not check to see if there are uncommitted changes');
 
     args.on('--help', this.help);
@@ -255,7 +258,7 @@ class Main {
     console.log(table.toString());
 
     let msg = `${this.sourceCommit.hash} package.json version (${this.sourcePackage.version}) will be merged to master replacing ${this.masterPackage.version}, continue?`;
-    if (semver.lt(this.sourcePackage.version, this.masterPackage.version)) {
+    if (!this.args.skipMatchingVersions && semver.lt(this.sourcePackage.version, this.masterPackage.version)) {
       msg = `${this.sourceCommit.hash} package.json version (${this.sourcePackage.version}) is >${'BEHIND'.red.underline.bold}< master's (${this.masterPackage.version}), continue?`;
     }
 
